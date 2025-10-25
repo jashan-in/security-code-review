@@ -6,22 +6,35 @@ db_config = {
     'host': 'mydatabase.com',
     'user': 'admin',
     'password': 'secret123'
-}
+    # Vulnerability: Hardcoded credentials (OWASP A02:2021 – Cryptographic Failures)
+    # Fix: Store credentials securely using environment variables or a secrets manager.
+} 
 
 def get_user_input():
     user_input = input('Enter your name: ')
     return user_input
+    # Vulnerability: Improper Input Validation (OWASP A04:2021 – Insecure Design)
+    # Fix: Validate and sanitize user input before using or storing it.
 
 def send_email(to, subject, body):
     os.system(f'echo {body} | mail -s "{subject}" {to}')
+    # Vulnerability: Command Injection (OWASP A03:2021 – Injection)
+    # Attackers could inject malicious shell commands via 'body' or 'subject'.
+    # Fix: Use Python's 'subprocess' module with argument lists or a secure email library.
 
 def get_data():
     url = 'http://insecure-api.com/get-data'
     data = urlopen(url).read().decode()
     return data
+    # Vulnerability: Insecure Data Transport (OWASP A02:2021 – Cryptographic Failures)
+    # The HTTP connection is unencrypted; data can be intercepted.
+    # Fix: Always use HTTPS (e.g., 'https://secure-api.com/...').
 
 def save_to_db(data):
     query = f"INSERT INTO mytable (column1, column2) VALUES ('{data}', 'Another Value')"
+    # Vulnerability: SQL Injection (OWASP A03:2021 – Injection)
+    # Attackers could insert malicious SQL code if 'data' is not sanitized.
+    # Fix: Use parameterized queries or prepared statements.
     connection = pymysql.connect(**db_config)
     cursor = connection.cursor()
     cursor.execute(query)
@@ -34,3 +47,5 @@ if __name__ == '__main__':
     data = get_data()
     save_to_db(data)
     send_email('admin@example.com', 'User Input', user_input)
+
+# Overall: No authentication or access control is implemented (OWASP A01:2021 – Broken Access Control)
