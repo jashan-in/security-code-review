@@ -1,6 +1,8 @@
 import os
 import pymysql
 from urllib.request import urlopen
+import pymysql
+from pymysql.cursors import DictCursor
 
 db_config = {
     'host': 'mydatabase.com',
@@ -28,19 +30,27 @@ def get_data():
     return data
     # Vulnerability: Insecure Data Transport (OWASP A02:2021 – Cryptographic Failures)
     # The HTTP connection is unencrypted; data can be intercepted.
-    # Fix: Always use HTTPS (e.g., 'https://secure-api.com/...').
+    # Fix: Always use HTTPS.
 
 def save_to_db(data):
-    query = f"INSERT INTO mytable (column1, column2) VALUES ('{data}', 'Another Value')"
-    # Vulnerability: SQL Injection (OWASP A03:2021 – Injection)
-    # Attackers could insert malicious SQL code if 'data' is not sanitized.
-    # Fix: Use parameterized queries or prepared statements.
-    connection = pymysql.connect(**db_config)
-    cursor = connection.cursor()
-    cursor.execute(query)
-    connection.commit()
-    cursor.close()
-    connection.close()
+    """
+    Mitigation: Use parameterized queries to prevent SQL Injection (OWASP A03:2021 – Injection)
+    """
+    connection = pymysql.connect(
+        host=os.environ.get("DB_HOST"),               # moved from hardcoded config
+        user=os.environ.get("DB_USER"),
+        password=os.environ.get("DB_PASSWORD"),
+        database=os.environ.get("DB_NAME", "appdb"),
+        cursorclass=DictCursor,
+        ssl={"ssl": {}} if os.environ.get("DB_SSL", "true") == "true" else None
+    )
+    try:
+        with connection.cursor() as cursor:
+            sql = "INSERT INTO mytable (column1, column2) VALUES (%s, %s)"
+            cursor.execute(sql, (data, "Another Value"))
+        connection.commit()
+    finally:
+        connection.close()
 
 if __name__ == '__main__':
     user_input = get_user_input()
