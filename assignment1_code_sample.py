@@ -3,10 +3,16 @@ import pymysql
 from urllib.request import urlopen
 
 db_config = {
-    'host': 'mydatabase.com',
-    'user': 'admin',
-    'password': 'secret123'
+    'host': os.getenv('DB_HOST'),
+    'user': os.getenv('DB_USER'),
+    'password': os.getenv('DB_PASSWORD')
 }
+
+if not all(db_config.values()):
+    raise EnvironmentError(
+        "Missing database credentials. Please set DB_HOST, DB_USER, "
+        "and DB_PASSWORD as environment variables."
+    )
 
 def get_user_input():
     user_input = input('Enter your name: ')
