@@ -3,6 +3,9 @@ import pymysql
 from urllib.request import urlopen
 import smtplib
 from email.message import EmailMessage
+import ssl
+from urllib.request import urlopen, Request
+from urllib.parse import urlparse
 
 db_config = {
     'host': os.getenv('DB_HOST'),
@@ -54,10 +57,30 @@ def send_email(to: str, subject: str, body: str) -> None:
             smtp.login(smtp_user, smtp_pass)
         smtp.send_message(msg)
 
+# Allowlist to avoid accidental SSRF (bonus hardening)
+ALLOWED_HOSTS = {"secure-api.com"}
+
 def get_data():
-    url = 'http://insecure-api.com/get-data'
-    data = urlopen(url).read().decode()
-    return data
+    """
+    Mitigation: Use HTTPS with certificate/hostname verification (OWASP A02:2021 – Cryptographic Failures)
+    Bonus: Simple allowlist to reduce SSRF risk (OWASP A10:2021 – SSRF)
+    """
+    url = os.getenv("DATA_API_URL", "https://secure-api.com/get-data")
+
+    # Block unapproved outbound destinations
+    host = urlparse(url).hostname
+    if host not in ALLOWED_HOSTS:
+        raise ValueError(f"Blocked outbound request to unapproved host: {host}")
+
+    # Enforce modern TLS
+    ctx = ssl.create_default_context()
+    ctx.minimum_version = ssl.TLSVersion.TLSv1_2  # require TLS 1.2+
+
+    req = Request(url, headers={"User-Agent": "security-review-assignment/1.0"})
+    with urlopen(req, context=ctx, timeout=5) as resp:
+        if resp.status != 200:
+            raise RuntimeError(f"Upstream returned HTTP {resp.status}")
+        return resp.read().decode("utf-8")
 
 def save_to_db(data):
     query = f"INSERT INTO mytable (column1, column2) VALUES ('{data}', 'Another Value')"
