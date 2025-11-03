@@ -6,6 +6,7 @@ from email.message import EmailMessage
 import ssl
 from urllib.request import urlopen, Request
 from urllib.parse import urlparse
+from pymysql.cursors import DictCursor
 
 db_config = {
     'host': os.getenv('DB_HOST'),
@@ -83,16 +84,47 @@ def get_data():
         return resp.read().decode("utf-8")
 
 def save_to_db(data):
-    query = f"INSERT INTO mytable (column1, column2) VALUES ('{data}', 'Another Value')"
-    connection = pymysql.connect(**db_config)
-    cursor = connection.cursor()
-    cursor.execute(query)
-    connection.commit()
-    cursor.close()
-    connection.close()
+    """
+    Mitigation: Use parameterized queries to prevent SQL Injection (OWASP A03:2021 – Injection).
+    - Uses load_db_config() / env vars for credentials (no hardcoded secrets).
+    - Uses parameter substitution instead of string formatting.
+    - Basic validation: ensure 'data' is a reasonable string.
+    """
+    # Basic input sanity check (prevent absurdly large payloads)
+    if not isinstance(data, str):
+        raise TypeError("data must be a string")
+    if len(data) > 10_000:  # tune limit for your app
+        raise ValueError("data is too long")
 
-if __name__ == '__main__':
-    user_input = get_user_input()
-    data = get_data()
-    save_to_db(data)
-    send_email('admin@example.com', 'User Input', user_input)
+    # Load DB config from environment (expects load_db_config() or similar)
+    # If you used the earlier snippet: connection = pymysql.connect(**load_db_config())
+    conn_kwargs = {
+        "host": os.getenv("DB_HOST"),
+        "user": os.getenv("DB_USER"),
+        "password": os.getenv("DB_PASSWORD"),
+        "database": os.getenv("DB_NAME", "appdb"),
+        "cursorclass": DictCursor,
+    }
+    # Optional: add SSL if configured
+    if os.getenv("DB_SSL", "true").lower() == "true":
+        conn_kwargs["ssl"] = {"ssl": {}}
+
+    # Fail fast if required env vars are missing
+    missing = [k for k in ("host", "user", "password") if not conn_kwargs.get(k)]
+    if missing:
+        raise EnvironmentError("Missing DB credentials; set DB_HOST, DB_USER, DB_PASSWORD")
+
+    connection = pymysql.connect(**conn_kwargs)
+    try:
+        with connection.cursor() as cursor:
+            sql = "INSERT INTO mytable (column1, column2) VALUES (%s, %s)"
+            # Parameterized execution prevents SQL injection
+            cursor.execute(sql, (data, "Another Value"))
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+    
+
