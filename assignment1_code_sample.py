@@ -20,9 +20,34 @@ if not all(db_config.values()):
         "and DB_PASSWORD as environment variables."
     )
 
+NAME_PATTERN = re.compile(r"^[A-Za-zÀ-ÖØ-öø-ÿ' -]{1,60}$")  # letters, spaces, hyphen, apostrophe (1–60 chars)
+
 def get_user_input():
-    user_input = input('Enter your name: ')
-    return user_input
+    """
+    Mitigation: Validate and sanitize user input (OWASP A04:2021 – Insecure Design)
+    - Trims leading/trailing whitespace
+    - Enforces length bounds (1–60)
+    - Restricts to letters + space/hyphen/apostrophe
+    - Rejects control characters/newlines
+    """
+    raw = input("Enter your name: ")
+
+    # Normalize whitespace
+    value = raw.strip()
+
+    # Quick rejects
+    if not value or len(value) > 60:
+        raise ValueError("Name must be 1–60 characters.")
+
+    # Disallow control characters / newlines explicitly
+    if any(ord(c) < 32 for c in value):
+        raise ValueError("Invalid control characters in name.")
+
+    # Character allow-list
+    if not NAME_PATTERN.fullmatch(value):
+        raise ValueError("Name may contain letters, spaces, hyphens, and apostrophes only.")
+
+    return value
 
 def send_email(to: str, subject: str, body: str) -> None:
     """
